@@ -1,6 +1,8 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266WebServer.h>
+#include <ArduinoJson.h>
 
+// WiFi credentials
 const char* ssid = "YOUR_SSID";
 const char* password = "YOUR_PASSWORD";
 
@@ -17,6 +19,7 @@ const int trigPin = D5;
 const int echoPin = D6;
 
 float measureDistance();
+void stopAllMotors();
 
 void setup() {
   Serial.begin(115200);
@@ -35,49 +38,82 @@ void setup() {
   pinMode(trigPin, OUTPUT);
   pinMode(echoPin, INPUT);
 
-  digitalWrite(motor1Pin1, LOW);
-  digitalWrite(motor1Pin2, LOW);
-  digitalWrite(motor2Pin1, LOW);
-  digitalWrite(motor2Pin2, LOW);
+  stopAllMotors();
 
   server.on("/motor1/left", []() {
     digitalWrite(motor1Pin1, HIGH);
     digitalWrite(motor1Pin2, LOW);
-    server.send(200, "text/plain", "Motor 1 turning Left");
+    DynamicJsonDocument doc(1024);
+    doc["status"] = "success";
+    doc["message"] = "Motor 1 turning Left";
+    String response;
+    serializeJson(doc, response);
+    server.send(200, "application/json", response);
   });
 
   server.on("/motor1/right", []() {
     digitalWrite(motor1Pin1, LOW);
     digitalWrite(motor1Pin2, HIGH);
-    server.send(200, "text/plain", "Motor 1 turning Right");
+    DynamicJsonDocument doc(1024);
+    doc["status"] = "success";
+    doc["message"] = "Motor 1 turning Right";
+    String response;
+    serializeJson(doc, response);
+    server.send(200, "application/json", response);
   });
 
   server.on("/motor2/left", []() {
     digitalWrite(motor2Pin1, HIGH);
     digitalWrite(motor2Pin2, LOW);
-    server.send(200, "text/plain", "Motor 2 turning Left");
+    DynamicJsonDocument doc(1024);
+    doc["status"] = "success";
+    doc["message"] = "Motor 2 turning Left";
+    String response;
+    serializeJson(doc, response);
+    server.send(200, "application/json", response);
   });
 
   server.on("/motor2/right", []() {
     digitalWrite(motor2Pin1, LOW);
     digitalWrite(motor2Pin2, HIGH);
-    server.send(200, "text/plain", "Motor 2 turning Right");
+    DynamicJsonDocument doc(1024);
+    doc["status"] = "success";
+    doc["message"] = "Motor 2 turning Right";
+    String response;
+    serializeJson(doc, response);
+    server.send(200, "application/json", response);
   });
 
   server.on("/distance", []() {
+    DynamicJsonDocument doc(1024);
     if (server.hasArg("meters")) {
       float targetDistance = server.arg("meters").toFloat();
       float measuredDistance = measureDistance();
       while (measuredDistance < targetDistance) {
+        if (measureDistance() < 30.0) {
+          stopAllMotors();
+          doc["status"] = "obstacle-detected";
+          doc["message"] = "Obstacle detected! Motors stopped.";
+          String response;
+          serializeJson(doc, response);
+          server.send(200, "application/json", response);
+          return;
+        }
         digitalWrite(motor1Pin1, HIGH);
         delay(100);
         measuredDistance += measureDistance();
       }
-      digitalWrite(motor1Pin1, LOW); 
-      server.send(200, "text/plain", "Target distance reached: " + String(measuredDistance) + " meters");
+      stopAllMotors();
+      doc["status"] = "success";
+      doc["message"] = "Target distance reached";
+      doc["distance"] = measuredDistance;
     } else {
-      server.send(400, "text/plain", "Bad Request: No distance provided");
+      doc["status"] = "error";
+      doc["message"] = "Bad Request: No distance provided";
     }
+    String response;
+    serializeJson(doc, response);
+    server.send(200, "application/json", response);
   });
 
   server.begin();
@@ -99,4 +135,11 @@ float measureDistance() {
   long duration = pulseIn(echoPin, HIGH);
   float distance = duration * 0.034 / 2;
   return distance;
+}
+
+void stopAllMotors() {
+  digitalWrite(motor1Pin1, LOW);
+  digitalWrite(motor1Pin2, LOW);
+  digitalWrite(motor2Pin1, LOW);
+  digitalWrite(motor2Pin2, LOW);
 }
